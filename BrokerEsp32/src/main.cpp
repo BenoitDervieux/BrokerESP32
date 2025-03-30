@@ -58,7 +58,7 @@ void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
   char * strToCompareYIMSTR = "YIMSTR?";
   // Sending bac the mac address, several times
   char * strToCompareHIMMA = "HIMMA:"; // here is my mac address
-  char * strToCompareInstructionEffects = "IE:"; // here is my mac address
+  char * strToCompareInstructionEffects = "IE"; // here is my mac address
   Serial.print("Mac address to send:");
   Serial.println(WiFi.macAddress());
   // Answering that the mac address is registered
@@ -123,7 +123,7 @@ void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
     macStart += 6; // Move past "HIMMA:"
     
     // Extract the MAC address string
-    char address[18] = {0}; // Initialize to zeros
+    char address[18] = {0};
     if (strlen(macStart) >= 17) {
         strncpy(address, macStart, 17);
     } else {
@@ -138,22 +138,33 @@ void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
         return;
     }
     
-    // Store in array if there's space
-    if (indexForMacAddresses < MAX_MAC_COUNT) {
-        memcpy(macAddresses[indexForMacAddresses], mac, MAC_LENGTH);
-        indexForMacAddresses++;
-        
-        // Print all stored MACs for verification
-        Serial.println("Stored MAC addresses:");
-        for (int i = 0; i < indexForMacAddresses; i++) {
-            char macStr[18];
-            snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
-                    macAddresses[i][0], macAddresses[i][1], macAddresses[i][2],
-                    macAddresses[i][3], macAddresses[i][4], macAddresses[i][5]);
-            Serial.println(macStr);
+    // Check for duplicates before storing
+    bool exists = false;
+    for (int i = 0; i < indexForMacAddresses; i++) {
+        if (memcmp(macAddresses[i], mac, MAC_LENGTH) == 0) {
+            exists = true;
+            break;
+        }
+    }
+    
+    if (!exists) {
+        if (indexForMacAddresses < MAX_MAC_COUNT) {
+            memcpy(macAddresses[indexForMacAddresses], mac, MAC_LENGTH);
+            indexForMacAddresses++;
+            
+            Serial.println("Stored MAC addresses:");
+            for (int i = 0; i < indexForMacAddresses; i++) {
+                char macStr[18];
+                snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
+                        macAddresses[i][0], macAddresses[i][1], macAddresses[i][2],
+                        macAddresses[i][3], macAddresses[i][4], macAddresses[i][5]);
+                Serial.println(macStr);
+            }
+        } else {
+            Serial.println("MAC address storage full");
         }
     } else {
-        Serial.println("MAC address storage full");
+        Serial.println("MAC address already exists");
     }
   }
 
@@ -234,19 +245,53 @@ void loop() {
   }
 
   if (indexForMacAddresses > 0) {
-    Serial.println("Trying to send something");
-    struct_message test;
-    test.master = isMaster;
-    strncpy(test.message, "IE52?", sizeof(test.message)); // Here it's like "Instructuon effect number 52
-    test.message[sizeof(test.message) - 1] = '\0';
-    for (int i = 0; i < indexForMacAddresses; i++) {
-      esp_err_t result1 = esp_now_send(
-        macAddresses[i], 
-        (uint8_t *) &test,
-        sizeof(struct_message));
-    }
+    static unsigned long lastSendTime = 0;
+    const unsigned long sendInterval = 5000; // 5 seconds
+    
+    if (millis() - lastSendTime >= sendInterval) {
+      lastSendTime = millis();
+      
+      Serial.println("Attempting to send message to all registered devices");
+      
+      struct_message test;
+      test.master = isMaster;
+      strncpy(test.message, "IE52", sizeof(test.message) - 1);
+      test.message[sizeof(test.message) - 1] = '\0';
+      
+      for (int i = 0; i < indexForMacAddresses; i++) {
+          Serial.printf("Sending to MAC %02X:%02X:%02X:%02X:%02X:%02X... ",
+                       macAddresses[i][0], macAddresses[i][1], macAddresses[i][2],
+                       macAddresses[i][3], macAddresses[i][4], macAddresses[i][5]);
 
-    delay(2000);
+          // Add peer
+          esp_now_peer_info_t peerInfo;
+          memcpy(peerInfo.peer_addr, macAddresses[i], 6);
+          peerInfo.channel = 0;
+          peerInfo.encrypt = false;
+          
+          esp_err_t addResult = esp_now_add_peer(&peerInfo);
+          if (addResult != ESP_OK) {
+              Serial.printf("Failed to add peer (Error: %d)\n", addResult);
+              continue;
+          }
+          
+          esp_err_t sendResult = esp_now_send(
+              macAddresses[i], 
+              (uint8_t *)&test,
+              sizeof(struct_message));
+          
+          // Remove peer after sending to free up space
+          esp_now_del_peer(macAddresses[i]);
+          
+          if (sendResult == ESP_OK) {
+              Serial.println("Success");
+          } else {
+              Serial.printf("Failed (Error: %d)\n", sendResult);
+          }
+          
+          delay(10); // Short delay between sends
+      }
+    }
   }
 }
 
