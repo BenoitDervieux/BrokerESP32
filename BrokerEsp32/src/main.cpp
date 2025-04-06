@@ -4,6 +4,11 @@
 *********/
 #include <esp_now.h>
 #include <WiFi.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "SPIFFS.h"
+#include <ArduinoJson.h>
 
 uint8_t broadcastAddress1[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
@@ -23,10 +28,16 @@ esp_now_peer_info_t peerInfo;
 const char* ssid     = "ESP32-Access-Point-lesklights";
 const char* password = "123456789";
 
+const char * normal_ssid = getenv("normal_ssid");
+const char * normal_password = getenv("normal_password");
+
 // Function definition
 bool stringToMac(const char* macStr, uint8_t* mac);
 void areYouAMasterMsgRecepted();
 void registerMacAddress(const char * macAddressString);
+void load_env_file(const char * filename);
+void masterConfirmationMsgRecepted();
+void displayByteReceived(struct_message myData, int len);
 
 // Variables to hold the mac addresses
 #define MAX_MAC_COUNT 20
@@ -212,45 +223,99 @@ void setup() {
   // Then try to find a master --> logic handled 
   // Then becomes a master --> logic handled
  
-  Serial.begin(115200);
- 
-  WiFi.mode(WIFI_STA);
-  int networks = WiFi.scanNetworks();
-  char sent[80];
-  char * wordy = "lesklights";
-  for (int i = 0; i < networks; i++) {
-    Serial.println(WiFi.SSID(i));
-    strcpy(sent, WiFi.SSID(i).c_str()); 
-    if (strstr(sent, wordy)) {
-      isMaster = false;
+  Serial.begin(9600);
+
+  // Load environment variables from .env file
+  // load_env_file(".env");
+  if(!SPIFFS.begin(true)){
+      Serial.println("An Error has occurred while mounting SPIFFS");
+  }
+
+  fs::File envVariables = SPIFFS.open("/networks.json", FILE_READ);
+  if (!envVariables) {
+      Serial.println("Failed to open file");
+      // return;
+  }
+  DynamicJsonDocument doc(1024);
+  DeserializationError error = deserializeJson(doc, envVariables);
+  envVariables.close();
+  if (error) {
+      Serial.println("Failed to parse JSON file");
+      return;
+  }
+
+  // Retrieve environment variables
+  const char *normal_ssid = doc["my_wifi"]["ssid"];
+  const char *normal_password = doc["my_wifi"]["password"];
+  Serial.print("Normal SSID: ");
+  Serial.println(normal_ssid);
+  Serial.print("Normal PWD: ");
+  Serial.println(normal_password);
+
+  // We try to connect to the normal wifi
+  WiFi.begin(normal_ssid, normal_password);
+  int attempt = 0;
+    // Here we try to connect
+  while (WiFi.status() != WL_CONNECTED && attempt < 5) {
+      delay(1000);
+      Serial.println("Connecting to WiFi...");
+      Serial.print("Pt 5475: Attempts --> ");
+      Serial.println(attempt);
+      attempt++;
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("Connected to WiFi");
+    WiFi.mode(WIFI_STA);
+    isMaster = false;
+    Serial.print("Is master? ");
+    Serial.println(isMaster);
+  }
+
+  if (WiFi.status() != WL_CONNECTED) {
+    WiFi.mode(WIFI_STA);
+    int networks = WiFi.scanNetworks();
+    char sent[80];
+    char * wordy = "lesklights";
+    for (int i = 0; i < networks; i++) {
+      Serial.println(WiFi.SSID(i));
+      strcpy(sent, WiFi.SSID(i).c_str()); 
+      if (strstr(sent, wordy)) {
+        isMaster = false;
+      }
     }
-  }
-  Serial.print("Is master? ");
-  Serial.println(isMaster);
-  if (isMaster) {
-    WiFi.softAP(ssid, password);
-    Serial.println("Became access point!");
-  }
-  if (esp_now_init() != ESP_OK) {
-    Serial.println("Error initializing ESP-NOW");
-    return;
-  }
-  
-  // Once ESPNow is successfully Init, we will register for recv CB to
-  // get recv packer info
-  esp_now_register_recv_cb(esp_now_recv_cb_t(OnDataRecv));
-
-  esp_now_register_send_cb(OnDataSent);
-
-  // register peer
-  peerInfo.channel = 0;  
-  peerInfo.encrypt = false;
+    Serial.print("Is master? ");
+    Serial.println(isMaster);
+    if (isMaster) {
+      WiFi.softAP(ssid, password);
+      Serial.println("Became access point!");
+    }
+    if (esp_now_init() != ESP_OK) {
+      Serial.println("Error initializing ESP-NOW");
+      return;
+    }
     
-  memcpy(peerInfo.peer_addr, broadcastAddress1, 6);
-  if (esp_now_add_peer(&peerInfo) != ESP_OK){
-    Serial.println("Failed to add peer");
-    return;
+    // Once ESPNow is successfully Init, we will register for recv CB to
+    // get recv packer info
+    esp_now_register_recv_cb(esp_now_recv_cb_t(OnDataRecv));
+  
+    esp_now_register_send_cb(OnDataSent);
+  
+    // register peer
+    peerInfo.channel = 0;  
+    peerInfo.encrypt = false;
+      
+    memcpy(peerInfo.peer_addr, broadcastAddress1, 6);
+    if (esp_now_add_peer(&peerInfo) != ESP_OK){
+      Serial.println("Failed to add peer");
+      return;
+    }
+
   }
+
+
+ 
+
 }
  
 void loop() {
@@ -329,3 +394,23 @@ void loop() {
   }
 }
 
+void load_env_file(const char * filename) {
+  FILE *file = fopen(filename, "r");
+  if(file == NULL) {
+    perror("Failed to open .env file");
+    return;
+  }
+  char line[256];
+  while(fgets(line, sizeof(line), file)) {
+    line[strcspn(line, "\n")] = 0;
+    char * key = strtok(line, "=");
+    char * value = strtok(NULL, "=");
+    if (key && value) {
+      if (setenv(key, value, 1) != 0) {
+        perror("setenv");
+      }
+    }
+  }
+
+  fclose(file);
+}
