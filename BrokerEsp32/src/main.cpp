@@ -10,6 +10,12 @@
 #include "SPIFFS.h"
 #include <ArduinoJson.h>
 
+#include <map>
+#include <string>
+#include <iostream>
+#include <vector>
+#include <utility>
+
 uint8_t broadcastAddress1[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
 // Structure for the data
@@ -20,7 +26,8 @@ typedef struct struct_message {
 
 struct_message myData; // Structure for the messages
 bool isMaster = true; // Define if someone is the master
-bool foundAMaster = false; // Define if has found a master 
+bool foundAMaster = false; // Define if has found a master
+bool connectedToWifi = false;
 uint8_t mac[6]; // Structure for holding the mac address
 
 esp_now_peer_info_t peerInfo;
@@ -254,72 +261,133 @@ void setup() {
 
   // We try to connect to the normal wifi
   WiFi.begin(normal_ssid, normal_password);
-  int attempt = 0;
+  int attemptMain = 0;
     // Here we try to connect
-  while (WiFi.status() != WL_CONNECTED && attempt < 5) {
+  while (WiFi.status() != WL_CONNECTED && attemptMain < 5) {
       delay(1000);
-      Serial.println("Connecting to WiFi...");
+      Serial.println("Connecting to WiFi in main credentials...");
       Serial.print("Pt 5475: Attempts --> ");
-      Serial.println(attempt);
-      attempt++;
+      Serial.println(attemptMain);
+      attemptMain++;
   }
 
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("Connected to WiFi");
+    Serial.println("Connected to WiFi in the main");
     WiFi.mode(WIFI_STA);
     isMaster = false;
     Serial.print("Is master? ");
     Serial.println(isMaster);
+    connectedToWifi = 1;
+    Serial.println("Now you're connected to Wifi...");
   }
 
   if (WiFi.status() != WL_CONNECTED) {
+    // Now we gonna go through all the networks we have in the json file
     WiFi.mode(WIFI_STA);
-    int networks = WiFi.scanNetworks();
-    char sent[80];
-    char * wordy = "lesklights";
-    for (int i = 0; i < networks; i++) {
-      Serial.println(WiFi.SSID(i));
-      strcpy(sent, WiFi.SSID(i).c_str()); 
-      if (strstr(sent, wordy)) {
-        isMaster = false;
+    WiFi.disconnect();
+    int networksFound = WiFi.scanNetworks();
+    Serial.print("PT 44444: Number of networks found --> ");
+    Serial.println(networksFound);
+    std::vector<std::pair<std::string, int>> network_map;
+    for (int i = 0; i < networksFound; ++i) {
+        // std::string ssid_temp = WiFi.SSID(i).c_str();
+        network_map.push_back(std::make_pair(WiFi.SSID(i).c_str(), WiFi.RSSI(i)));
+    }
+    auto cmp = [](std::pair<std::string, int> a, std::pair<std::string, int>b) { return a.second > b.second; };
+    std::sort(network_map.begin(), network_map.end(), cmp);
+    std::vector<std::pair<std::string, std::string>> networks_available;
+    for (int i = 0; i < network_map.size(); i++) {
+      std::string network_ssid = network_map[i].first;
+      // Iterate through all the networks in memory
+      for (int j = 0; j < doc["networks"].size(); j++) {
+          std::string in_memory_ssid = doc["networks"]["networks" + String(j)]["ssid"];
+          std::string in_memory_pwd = doc["networks"]["networks" + String(j)]["password"];
+          Serial.println(in_memory_ssid.c_str());
+          if (in_memory_ssid.compare(network_ssid) == 0) {
+            std::pair<std::string, std::string> pairToAdd;
+            pairToAdd.first = in_memory_ssid;
+            pairToAdd.second = in_memory_pwd;
+            networks_available.push_back(pairToAdd);
+          }
       }
     }
-    Serial.print("Is master? ");
-    Serial.println(isMaster);
-    if (isMaster) {
-      WiFi.softAP(ssid, password);
-      Serial.println("Became access point!");
+    // Check if there were networks available around that we could connect to
+    if (networks_available.size() > 0) {
+      // Iterate through all the networks available
+      for (int i = 0; i < networks_available.size(); i++) {
+          // Set the SSID and password locally in the class
+          std::string ssidToTry = networks_available[i].first.c_str();
+          std::string pwdToTry = networks_available[i].second.c_str();
+          // Try to start the connexion
+          WiFi.begin(ssidToTry.c_str(), pwdToTry.c_str());
+          int attemptSecond = 0;
+          // 10 seconds or 10 attempts
+          while (WiFi.status() != WL_CONNECTED && attemptSecond < 5) {
+              delay(100);
+              Serial.println("Connecting to WiFi in secondary networks ...");
+              attemptSecond++;
+          }
+          // If connected, the set as a client and then break the loop
+          if (WiFi.status() == WL_CONNECTED) {
+              Serial.println("Connected to Wifi with a stocked password");
+              connectedToWifi = 1;
+              break;
+          }
+          
+      }
+      if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("Didn't managed to connect to Wifi");
+      }
     }
-    if (esp_now_init() != ESP_OK) {
-      Serial.println("Error initializing ESP-NOW");
-      return;
-    }
-    
-    // Once ESPNow is successfully Init, we will register for recv CB to
-    // get recv packer info
-    esp_now_register_recv_cb(esp_now_recv_cb_t(OnDataRecv));
-  
-    esp_now_register_send_cb(OnDataSent);
-  
-    // register peer
-    peerInfo.channel = 0;  
-    peerInfo.encrypt = false;
+
+
+
+    if (WiFi.status() != WL_CONNECTED) {
+        // Under is the fact of scanning the network
+        WiFi.mode(WIFI_STA);
+        int networks = WiFi.scanNetworks();
+        char sent[80];
+        char * wordy = "lesklights";
+        for (int i = 0; i < networks; i++) {
+          Serial.println(WiFi.SSID(i));
+          strcpy(sent, WiFi.SSID(i).c_str()); 
+          if (strstr(sent, wordy)) {
+            isMaster = false;
+          }
+        }
+        Serial.print("Is master? ");
+        Serial.println(isMaster);
+        if (isMaster) {
+          WiFi.softAP(ssid, password);
+          Serial.println("Became access point!");
+        }
+        if (esp_now_init() != ESP_OK) {
+          Serial.println("Error initializing ESP-NOW");
+          return;
+        }
+        
+        // Once ESPNow is successfully Init, we will register for recv CB to
+        // get recv packer info
+        esp_now_register_recv_cb(esp_now_recv_cb_t(OnDataRecv));
       
-    memcpy(peerInfo.peer_addr, broadcastAddress1, 6);
-    if (esp_now_add_peer(&peerInfo) != ESP_OK){
-      Serial.println("Failed to add peer");
-      return;
+        esp_now_register_send_cb(OnDataSent);
+      
+        // register peer
+        peerInfo.channel = 0;  
+        peerInfo.encrypt = false;
+          
+        memcpy(peerInfo.peer_addr, broadcastAddress1, 6);
+        if (esp_now_add_peer(&peerInfo) != ESP_OK){
+          Serial.println("Failed to add peer");
+          return;
+        }
+
+      }
     }
-
-  }
-
-
- 
-
 }
  
 void loop() {
-  if (!isMaster && !foundAMaster) {
+  if (!connectedToWifi && !isMaster && !foundAMaster) {
     Serial.print("Is master:");
     Serial.println(isMaster);
     Serial.print("Found a master:");
@@ -344,7 +412,12 @@ void loop() {
       delay(2000);
   }
 
-  if (indexForMacAddresses > 0) {
+  if (connectedToWifi == 1) {
+    Serial.println("Im just a chill ESP 32 connected to wifi");
+    delay(3000);
+  }
+
+  if (isMaster && indexForMacAddresses > 0) {
     static unsigned long lastSendTime = 0;
     const unsigned long sendInterval = 5000; // 5 seconds
     
