@@ -16,6 +16,10 @@
 #include <vector>
 #include <utility>
 
+#include "painlessMeshClass.h"
+
+PainLessMeshClass painLessMeshClass;
+
 uint8_t broadcastAddress1[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
 // Structure for the data
@@ -28,6 +32,7 @@ struct_message myData; // Structure for the messages
 bool isMaster = true; // Define if someone is the master
 bool foundAMaster = false; // Define if has found a master
 bool connectedToWifi = false;
+bool connectedToPMesh = false;
 uint8_t mac[6]; // Structure for holding the mac address
 
 esp_now_peer_info_t peerInfo;
@@ -279,6 +284,9 @@ void setup() {
     Serial.println(isMaster);
     connectedToWifi = 1;
     Serial.println("Now you're connected to Wifi...");
+    painLessMeshClass.instantiate();
+    painLessMeshClass.wifi_init();
+    connectedToPMesh = true;
   }
 
   if (WiFi.status() != WL_CONNECTED) {
@@ -331,6 +339,9 @@ void setup() {
           if (WiFi.status() == WL_CONNECTED) {
               Serial.println("Connected to Wifi with a stocked password");
               connectedToWifi = 1;
+              painLessMeshClass.instantiate();
+              painLessMeshClass.wifi_init();
+              connectedToPMesh = true;
               break;
           }
           
@@ -415,6 +426,11 @@ void loop() {
   if (connectedToWifi == 1) {
     Serial.println("Im just a chill ESP 32 connected to wifi");
     delay(3000);
+  }
+
+  if (connectedToPMesh) {
+    Serial.println("Im just a chill ESP 32 mesh connected to wifi");
+    painLessMeshClass.run();
   }
 
   if (isMaster && indexForMacAddresses > 0) {
