@@ -6,6 +6,7 @@
 using namespace std;
 #include <SPI.h>
 #include "painlessMesh.h"
+#include "fastLedClass.h"
 
 #define NUM_LEDS 10
 #define DATA_PIN_1 23
@@ -21,7 +22,7 @@ class PainLessMeshClass {
 
     public: 
         PainLessMeshClass();
-        void instantiate();
+        void instantiate(FastLedClass fastLedClass);
         void wifi_init();
         void run();
         void sendMessage();
@@ -30,8 +31,6 @@ class PainLessMeshClass {
         void newConnectionCallback(uint32_t nodeId);
         void changedConnectionCallback();
         void nodeTimeAdjustedCallback(int32_t offset);
-        CRGB hexToCRGB(const String& hex);
-        String decimalStringToHex(String decimalString);
 
     private:
         Task task;
@@ -39,6 +38,7 @@ class PainLessMeshClass {
         int buttonPin;
         int buttonState;
         String bufferMessage;
+        FastLedClass fastLedClass;
 
 };
 

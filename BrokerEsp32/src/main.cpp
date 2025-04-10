@@ -17,8 +17,10 @@
 #include <utility>
 
 #include "painlessMeshClass.h"
+#include "fastLedClass.h"
 
 PainLessMeshClass painLessMeshClass;
+FastLedClass fastLedClass;
 
 uint8_t broadcastAddress1[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
@@ -47,7 +49,6 @@ const char * normal_password = getenv("normal_password");
 bool stringToMac(const char* macStr, uint8_t* mac);
 void areYouAMasterMsgRecepted();
 void registerMacAddress(const char * macAddressString);
-void load_env_file(const char * filename);
 void masterConfirmationMsgRecepted();
 void displayByteReceived(struct_message myData, int len);
 
@@ -238,7 +239,6 @@ void setup() {
   Serial.begin(9600);
 
   // Load environment variables from .env file
-  // load_env_file(".env");
   if(!SPIFFS.begin(true)){
       Serial.println("An Error has occurred while mounting SPIFFS");
   }
@@ -284,7 +284,7 @@ void setup() {
     Serial.println(isMaster);
     connectedToWifi = 1;
     Serial.println("Now you're connected to Wifi...");
-    painLessMeshClass.instantiate();
+    painLessMeshClass.instantiate(fastLedClass);
     painLessMeshClass.wifi_init();
     connectedToPMesh = true;
   }
@@ -339,7 +339,7 @@ void setup() {
           if (WiFi.status() == WL_CONNECTED) {
               Serial.println("Connected to Wifi with a stocked password");
               connectedToWifi = 1;
-              painLessMeshClass.instantiate();
+              painLessMeshClass.instantiate(fastLedClass);
               painLessMeshClass.wifi_init();
               connectedToPMesh = true;
               break;
@@ -481,25 +481,4 @@ void loop() {
       }
     }
   }
-}
-
-void load_env_file(const char * filename) {
-  FILE *file = fopen(filename, "r");
-  if(file == NULL) {
-    perror("Failed to open .env file");
-    return;
-  }
-  char line[256];
-  while(fgets(line, sizeof(line), file)) {
-    line[strcspn(line, "\n")] = 0;
-    char * key = strtok(line, "=");
-    char * value = strtok(NULL, "=");
-    if (key && value) {
-      if (setenv(key, value, 1) != 0) {
-        perror("setenv");
-      }
-    }
-  }
-
-  fclose(file);
 }

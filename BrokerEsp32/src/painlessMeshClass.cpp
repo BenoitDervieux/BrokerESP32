@@ -1,24 +1,21 @@
 #include "painlessMeshClass.h"
 
-CRGB leds[NUM_LEDS];
+
 Scheduler userScheduler; // to control your personal task
 painlessMesh  mesh;
 int buttonState = 0;
 
 
 PainLessMeshClass::PainLessMeshClass() {
+	
 	buttonPin = BUTTON_PIN;
 	buttonState = 0;
 }
 
-void PainLessMeshClass::instantiate() {
+void PainLessMeshClass::instantiate(FastLedClass fastLedClass) {
 	this->task.set(0, 0, [this]() { this->sendMessage(); });
-	FastLED.addLeds<WS2812B, DATA_PIN_1, GRB>(leds, NUM_LEDS);
-	FastLED.setBrightness(BRIGHTNESS);
-	fill_solid(leds, NUM_LEDS, CRGB::Black);
-	FastLED.show();
 	pinMode(buttonPin, INPUT);
-	
+	this->fastLedClass = fastLedClass;
 }
 
 void PainLessMeshClass::wifi_init() {
@@ -40,9 +37,6 @@ void PainLessMeshClass::wifi_init() {
 	Serial.println("After add task");
 	this->task.enable();
 	Serial.println("after enable");
-
-	fill_solid(leds, NUM_LEDS, CRGB::Blue);
-    FastLED.show();
 }
 
 void PainLessMeshClass::run() {
@@ -50,18 +44,13 @@ void PainLessMeshClass::run() {
 	if (buttonState == HIGH) {
 		Serial.println("Sending message...");
 		PainLessMeshClass::sendMessage();
-		fill_solid(leds, NUM_LEDS, CRGB::Purple);
-		// fill_solid(leds, NUM_LEDS, CRGB::Chartreuse);
-		// fill_solid(leds, NUM_LEDS, CRGB::Red);
-		FastLED.show();
+		this->fastLedClass.setToPurple();
 	}
 	mesh.update();
 }
 
 void PainLessMeshClass::sendMessage() {
 	JsonDocument doc;
-	// doc["color"] = 0xDFFF00; // Chartreuse
-	// doc["color"] = 0xFF0000;
 	doc["color"] = 0xA020F0; // purple
 	String output;
 	serializeJson(doc, output);
@@ -79,9 +68,7 @@ void PainLessMeshClass::receivedCallback( uint32_t from, String &msg ) {
 	deserializeJson(doc, msg);
 	String colorHex = doc["color"].as<String>();
 	Serial.printf("color: %s\n", colorHex.c_str());
-	CRGB color = hexToCRGB(this->decimalStringToHex(colorHex));
-	fill_solid(leds, NUM_LEDS, color);
-	FastLED.show();
+	this->fastLedClass.changeColor(colorHex.c_str());
 //   }
 }
 
@@ -95,30 +82,4 @@ void PainLessMeshClass::changedConnectionCallback() {
 
 void PainLessMeshClass::nodeTimeAdjustedCallback(int32_t offset) {
     Serial.printf("Adjusted time %u. Offset = %d\n", mesh.getNodeTime(),offset);
-}
-
-CRGB PainLessMeshClass::hexToCRGB(const String& hex) {
-    // Ensure the hex string is valid and properly formatted
-    String cleanedHex = hex;
-    if (cleanedHex.startsWith("#")) {
-        cleanedHex.remove(0, 1); // Remove '#'
-    }
-    uint32_t color = strtoul(cleanedHex.c_str(), nullptr, 16);
-    return CRGB(
-        (color >> 16) & 0xFF,  // Red
-        (color >> 8) & 0xFF,   // Green
-        color & 0xFF           // Blue
-    );
-}
-
-String PainLessMeshClass::decimalStringToHex(String decimalString) {
-    // Convert the decimal string to an integer
-    int decimalColor = decimalString.toInt();
-
-    // Use sprintf to format the integer as a hexadecimal string
-    char hexColor[8];  // Enough space for a 6-digit hex number and the null terminator
-    sprintf(hexColor, "#%06X", decimalColor);
-    
-    // Return the hexadecimal string
-    return String(hexColor);
 }
