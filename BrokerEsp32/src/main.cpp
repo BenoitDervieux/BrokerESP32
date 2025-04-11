@@ -58,6 +58,10 @@ void displayByteReceived(struct_message myData, int len);
 uint8_t macAddresses[MAX_MAC_COUNT][MAC_LENGTH];
 int indexForMacAddresses = 0;
 
+#define BUTTON_PIN 15
+int buttonState = 0;
+int buttonPin = 0;
+
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
   char macStr[18];
   Serial.print("Packet to: ");
@@ -97,6 +101,8 @@ void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
   if (strncmp(myData.message, strToCompareInstructionEffects, strlen(strToCompareInstructionEffects)) == 0) {
     Serial.println("\n#####################\nReceived my first instruction:");
     Serial.println(myData.message);
+    std::string instruction = std::string(myData.message).substr(3, 6);
+    fastLedClass.changeColor(instruction.c_str());
   }
 }
 
@@ -236,7 +242,9 @@ void setup() {
   // Then try to find a master --> logic handled 
   // Then becomes a master --> logic handled
  
-  Serial.begin(9600);
+  Serial.begin(115200);
+  // while(!Serial) { ; }
+  Serial.println("\n\nSerial test - if you see this, serial works");
 
   // Load environment variables from .env file
   if(!SPIFFS.begin(true)){
@@ -248,6 +256,10 @@ void setup() {
       Serial.println("Failed to open file");
       // return;
   }
+  fastLedClass.init();
+  buttonPin = BUTTON_PIN;
+	buttonState = 0;
+	pinMode(buttonPin, INPUT);
   DynamicJsonDocument doc(1024);
   DeserializationError error = deserializeJson(doc, envVariables);
   envVariables.close();
@@ -398,6 +410,7 @@ void setup() {
 }
  
 void loop() {
+  buttonState = digitalRead(buttonPin);
   if (!connectedToWifi && !isMaster && !foundAMaster) {
     Serial.print("Is master:");
     Serial.println(isMaster);
@@ -433,51 +446,68 @@ void loop() {
     painLessMeshClass.run();
   }
 
-  if (isMaster && indexForMacAddresses > 0) {
-    static unsigned long lastSendTime = 0;
-    const unsigned long sendInterval = 5000; // 5 seconds
-    
-    if (millis() - lastSendTime >= sendInterval) {
-      lastSendTime = millis();
+  if (buttonState == HIGH) {
+    Serial.println("Button pressed");
+    // Here it's really for the master but there should as be for the painlessmesh
+    if (isMaster && indexForMacAddresses > -1) {
+      static unsigned long lastSendTime = 0;
+      const unsigned long sendInterval = 5000; // 5 seconds
       
-      Serial.println("Attempting to send message to all registered devices");
-      
-      struct_message test;
-      test.master = isMaster;
-      strncpy(test.message, "IE52", sizeof(test.message) - 1);
-      test.message[sizeof(test.message) - 1] = '\0';
-      for (int i = 0; i < indexForMacAddresses; i++) {
-          Serial.printf("Sending to MAC %02X:%02X:%02X:%02X:%02X:%02X... ",
-                       macAddresses[i][0], macAddresses[i][1], macAddresses[i][2],
-                       macAddresses[i][3], macAddresses[i][4], macAddresses[i][5]);
+      if (millis() - lastSendTime >= sendInterval) {
+        lastSendTime = millis();
+        
+        Serial.println("Attempting to send message to all registered devices");
+        
+        struct_message test;
+        test.master = isMaster;
+        char str[9];
+        str[0] = 'I';
+        str[1] = 'E';
+        int r = rand() % 256;
+        int g = rand() % 256;
+        int b = rand() % 256;
+        sprintf(str + 2, "#%02X%02X%02X", r, g, b);
+        strncpy(test.message, str, sizeof(test.message) - 1);
+        test.message[sizeof(test.message) - 1] = '\0';
+        Serial.print("Message: ");
+        Serial.println(test.message);
+        // Here was just to check the method for the substring we want to send
+        // std::string instruction = std::string(test.message).substr(3, 6);
+        // Serial.print("Test substring: ");
+        // Serial.println(instruction.c_str());
+        for (int i = 0; i < indexForMacAddresses; i++) {
+            Serial.printf("Sending to MAC %02X:%02X:%02X:%02X:%02X:%02X... ",
+                        macAddresses[i][0], macAddresses[i][1], macAddresses[i][2],
+                        macAddresses[i][3], macAddresses[i][4], macAddresses[i][5]);
 
-          // Add peer
-          esp_now_peer_info_t peerInfo;
-          memcpy(peerInfo.peer_addr, macAddresses[i], 6);
-          peerInfo.channel = 0;
-          peerInfo.encrypt = false;
-          
-          esp_err_t addResult = esp_now_add_peer(&peerInfo);
-          if (addResult != ESP_OK) {
-              Serial.printf("Failed to add peer (Error: %d)\n", addResult);
-              continue;
-          }
-          
-          esp_err_t sendResult = esp_now_send(
-              macAddresses[i], 
-              (uint8_t *)&test,
-              sizeof(struct_message));
-          
-          // Remove peer after sending to free up space
-          esp_now_del_peer(macAddresses[i]);
-          
-          if (sendResult == ESP_OK) {
-              Serial.println("Success");
-          } else {
-              Serial.printf("Failed (Error: %d)\n", sendResult);
-          }
-          
-          delay(10); // Short delay between sends
+            // Add peer
+            esp_now_peer_info_t peerInfo;
+            memcpy(peerInfo.peer_addr, macAddresses[i], 6);
+            peerInfo.channel = 0;
+            peerInfo.encrypt = false;
+            
+            esp_err_t addResult = esp_now_add_peer(&peerInfo);
+            if (addResult != ESP_OK) {
+                Serial.printf("Failed to add peer (Error: %d)\n", addResult);
+                continue;
+            }
+            
+            esp_err_t sendResult = esp_now_send(
+                macAddresses[i], 
+                (uint8_t *)&test,
+                sizeof(struct_message));
+            
+            // Remove peer after sending to free up space
+            esp_now_del_peer(macAddresses[i]);
+            
+            if (sendResult == ESP_OK) {
+                Serial.println("Success");
+            } else {
+                Serial.printf("Failed (Error: %d)\n", sendResult);
+            }
+            
+            delay(10); // Short delay between sends
+        }
       }
     }
   }

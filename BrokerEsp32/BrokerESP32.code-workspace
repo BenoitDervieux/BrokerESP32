@@ -92,7 +92,12 @@
 			"*.tcc": "cpp",
 			"memory_resource": "cpp",
 			"string_view": "cpp",
-			"cinttypes": "cpp"
+			"cinttypes": "cpp",
+			"bitset": "cpp",
+			"condition_variable": "cpp",
+			"csignal": "cpp",
+			"mutex": "cpp",
+			"set": "cpp"
 		}
 	}
 }

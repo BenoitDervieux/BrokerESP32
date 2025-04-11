@@ -16,6 +16,7 @@ class FastLedClass {
 
     public: 
         FastLedClass();
+        void init();
         void changeColor(String colorToConvert);
         CRGB hexToCRGB(const String& hex);
         String decimalStringToHex(String decimalString);

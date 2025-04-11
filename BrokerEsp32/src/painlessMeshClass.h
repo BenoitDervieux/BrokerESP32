@@ -11,7 +11,7 @@ using namespace std;
 #define NUM_LEDS 10
 #define DATA_PIN_1 23
 #define BRIGHTNESS 100
-#define BUTTON_PIN 15
+
 
 
 #define   MESH_PREFIX     "whateverYouLike"
@@ -35,8 +35,6 @@ class PainLessMeshClass {
     private:
         Task task;
         String readings;
-        int buttonPin;
-        int buttonState;
         String bufferMessage;
         FastLedClass fastLedClass;
 

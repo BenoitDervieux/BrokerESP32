@@ -4,6 +4,10 @@
 CRGB leds[NUM_LEDS];
 
 FastLedClass::FastLedClass() {
+    
+}
+
+void FastLedClass::init() {
     FastLED.addLeds<WS2812B, DATA_PIN_1, GRB>(leds, NUM_LEDS);
     FastLED.setBrightness(BRIGHTNESS);
     fill_solid(leds, NUM_LEDS, CRGB::Black);

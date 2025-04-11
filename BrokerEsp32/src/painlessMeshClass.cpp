@@ -3,23 +3,18 @@
 
 Scheduler userScheduler; // to control your personal task
 painlessMesh  mesh;
-int buttonState = 0;
 
 
-PainLessMeshClass::PainLessMeshClass() {
-	
-	buttonPin = BUTTON_PIN;
-	buttonState = 0;
+PainLessMeshClass::PainLessMeshClass() {	
+
 }
 
 void PainLessMeshClass::instantiate(FastLedClass fastLedClass) {
 	this->task.set(0, 0, [this]() { this->sendMessage(); });
-	pinMode(buttonPin, INPUT);
 	this->fastLedClass = fastLedClass;
 }
 
 void PainLessMeshClass::wifi_init() {
-	// Serial.println("Init WiFi");
 	//mesh.setDebugMsgTypes( ERROR | MESH_STATUS | CONNECTION | SYNC | COMMUNICATION | GENERAL | MSG_TYPES | REMOTE ); // all types on
 	mesh.setDebugMsgTypes( ERROR | STARTUP );  // set before init() so that you can see startup messages
 	Serial.println("After set Debug");
@@ -40,12 +35,9 @@ void PainLessMeshClass::wifi_init() {
 }
 
 void PainLessMeshClass::run() {
-	buttonState = digitalRead(buttonPin);
-	if (buttonState == HIGH) {
-		Serial.println("Sending message...");
-		PainLessMeshClass::sendMessage();
-		this->fastLedClass.setToPurple();
-	}
+	Serial.println("Sending message...");
+	PainLessMeshClass::sendMessage();
+	this->fastLedClass.setToPurple();
 	mesh.update();
 }
 
