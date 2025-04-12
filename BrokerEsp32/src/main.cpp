@@ -58,7 +58,7 @@ void displayByteReceived(struct_message myData, int len);
 uint8_t macAddresses[MAX_MAC_COUNT][MAC_LENGTH];
 int indexForMacAddresses = 0;
 
-#define BUTTON_PIN 15
+#define BUTTON_PIN 18
 int buttonState = 0;
 int buttonPin = 0;
 
@@ -451,7 +451,7 @@ void loop() {
     // Here it's really for the master but there should as be for the painlessmesh
     if (isMaster && indexForMacAddresses > -1) {
       static unsigned long lastSendTime = 0;
-      const unsigned long sendInterval = 5000; // 5 seconds
+      const unsigned long sendInterval = 100; // 5 seconds
       
       if (millis() - lastSendTime >= sendInterval) {
         lastSendTime = millis();
@@ -471,6 +471,8 @@ void loop() {
         test.message[sizeof(test.message) - 1] = '\0';
         Serial.print("Message: ");
         Serial.println(test.message);
+        std::string instruction = std::string(test.message).substr(2, 7);
+        fastLedClass.changeColor(instruction.c_str());
         // Here was just to check the method for the substring we want to send
         // std::string instruction = std::string(test.message).substr(3, 6);
         // Serial.print("Test substring: ");

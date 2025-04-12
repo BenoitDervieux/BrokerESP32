@@ -17,7 +17,12 @@ void FastLedClass::init() {
 }
 
 void FastLedClass::changeColor(String colorToConvert) {
-    CRGB color = hexToCRGB(this->decimalStringToHex(colorToConvert));
+    Serial.print("In the fastled class: ");
+    Serial.print(colorToConvert);
+    Serial.print(" --> ");
+    Serial.println(decimalStringToHex(colorToConvert.c_str()));
+    // CRGB color = hexToCRGB(this->decimalStringToHex(colorToConvert.c_str()));
+    CRGB color = hexToCRGB(colorToConvert.c_str());
 	fill_solid(leds, NUM_LEDS, color);
 	FastLED.show();
 }
@@ -30,13 +35,17 @@ void FastLedClass::setToPurple() {
 
 
 
-CRGB FastLedClass::hexToCRGB(const String& hex) {
+CRGB FastLedClass::hexToCRGB(const String hex) {
     // Ensure the hex string is valid and properly formatted
     String cleanedHex = hex;
     if (cleanedHex.startsWith("#")) {
         cleanedHex.remove(0, 1); // Remove '#'
     }
+    Serial.print("String in hexToCrgb: ");
+    Serial.println(hex);
     uint32_t color = strtoul(cleanedHex.c_str(), nullptr, 16);
+    Serial.print("Color in hex: ");
+    Serial.println(color);
     return CRGB(
         (color >> 16) & 0xFF,  // Red
         (color >> 8) & 0xFF,   // Green

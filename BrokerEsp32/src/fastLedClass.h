@@ -18,7 +18,7 @@ class FastLedClass {
         FastLedClass();
         void init();
         void changeColor(String colorToConvert);
-        CRGB hexToCRGB(const String& hex);
+        CRGB hexToCRGB(const String hex);
         String decimalStringToHex(String decimalString);
         void setToPurple();
 
